@@ -1,90 +1,157 @@
-''' Positional servo controller.
+'''
+Automated feeder. A servo activates after an adjustable delay.
+The delay can be increased or decreased using the buttons.
+Matthew Oppenheim 2020
+delay not saving to persistent file
+v0.1
 '''
 
-from microbit import button_a, button_b, display, pin0, sleep
+# from microbit import button_a, button_b, display, Image, pin0, time
+from microbit import *
+import time as time
 
+BRIGHT = '7'
 DELAY_FILE = 'delay_minutes.txt'
-DELAY_MINUTES = 2
+# delay in minutes until the feeder activates
+DELAY_MINUTES = 12
+# maximum number of LEDs on the board
+LEDS = 25
+# maximum number of LEDs to use
+MAX_DELAY_LEDS = 25
+# maximum delay
+MAX_DELAY_MINUTES = 300
+# how many minutes delay an active LED represents
+MINUTES_PER_LED = 12
 
 class DelayFile:
-    def __init__(self, filename=DELAY_FILE):
+    ''' Handle the file containing the delay time on the microbit. '''
+    def __init__(self, filename=DELAY_FILE, delay=DELAY_MINUTES):
         self.filename = filename
-
-    def read(self):
         try:
-            with open(filename, 'r') as my_file:
-                read_value = my_file.read()
+            self.delay = self.readfile(filename)
+            print('delay file {} already exists with value {}'.format(
+                filename, self.delay))
         except Exception as e:
-            print('could not read from {}\nerror {}\n'.format(filename, e))
-            print('creating file with default value: {}'.format(DELAY_MINUTES))
-            self.write(DELAY_MINUTES)
-            return DELAY_MINUTES
-        return read_value
+            print('could not read from {}\nerror {}\n'.format(
+                self.filename, e))
+            print('creating file with value: {}'.format(delay))
+            self.writefile(delay)
+            self.delay = delay
+        
 
+    def decrease_delay(self):
+        ''' Decrease the value in the delay file. '''
+        self.delay -= MINUTES_PER_LED
+        if self.delay < 0:
+            self.delay = 0
+        self.writefile(self.delay)
 
-    def write(self, value):
-        with open(filename, 'w') as my_file:
+    def get_delay_min(self):
+        return self.delay
+        
+    def get_delay_ms(self):
+        ''' Get the delay in ms. '''
+        return self.delay * 60 * 1000
+
+    def increase_delay(self):
+        ''' Increase the value in the delay file. '''
+        self.delay += MINUTES_PER_LED
+        if self.delay > MAX_DELAY_MINUTES:
+            self.delay = MAX_DELAY_MINUTES
+        self.writefile(self.delay)
+
+    def readfile(self, filename):
+        ''' Read from the file on the microbit. '''
+        with open(filename, 'r') as my_file:
+            content = my_file.read()
+        return content 
+
+    def writefile(self, value):
+        ''' Write to the file on the microbit. '''
+        with open(self.filename, 'w') as my_file:
             my_file.write(str(value))
-            print('written {} to {}'.format(value, filename))
-            my_file.close()
-
-class Servo:
-    ''' Creates repeated pulses in a 20ms time window. '''
-    def __init__(self, servo_pin=pin0):
-        self.pin = servo_pin
-        # 20ms gives 50Hz, standard servo signal frequencyinfo2
-        print('starting Servo')
-        self.pin.set_analog_period(20)
+            print('written {} to {}'.format(value, self.filename))
 
 
-    def set_ms_pulse(self, ms_on):
-        # pin.write_analog(1023) is constant on
-        # (1023 * ms_on / 20) gives a ms_on pulse
-        self.pin.write_analog(1023 * ms_on / 20)
+def servo_set_ms_pulse(ms_on, pin):
+        # pin.write_analog(1023) is constant on pulse
+        # (1023 * ms_on / 20) gives a pulse of length ms_on
+        # pulse sets the servo angle
+        pin.write_analog(1023 * ms_on / 20)
 
 
-    def set_ms_pulse_invert(self, ms_on):
-        ''' Gives inverted logic servo control pulse. '''
-        self.pin.write_analog(1023 - 1023 * (ms_on / 20))
-
-
-    def set_degree(self, deg):
-        ''' Set position in degrees. '''
-        self.degrees = deg
-        # 180 degrees = 1.0 ms pulse, 0 degrees = 2.0 ms pulse
-        self.set_ms_pulse(2 + (-self.degrees / 180))
-        print('servo set to {} degrees'.format(deg))
-
-
-    def rotate_clockwise(self):
-        new_deg = min(180, self.degrees + 1)
-        self.set_degree(new_deg)
-
-
-    def rotate_counterclockwise(self):
-        new_deg = max(0, self.degrees - 1)
-        self.set_degree(new_deg)
+def servo_set_degree(degrees, pin):
+    ''' Set servo position in degrees. '''
+    # 180 degrees = 1.0 ms pulse, 0 degrees = 2.0 ms pulse
+    servo_set_ms_pulse(2 + (-degrees / 180), pin)
+    print('servo set to {} degrees'.format(degrees))
 
 
 
-
-servo1 = Servo()
-delay = DelayFile()
-
-while True:
+def button_a_pressed(delay_file):
+    ''' Increase the time delay. '''
+    print('button a press detected')
+    display.show('-')
     sleep(20)
-    display.set_pixel(4,0,0)
-    display.set_pixel(0,0,0)
-    display.set_pixel(2,2,5)
+    display.clear()
+    delay_file.decrease_delay()
+    display_show_delay()
 
-    if button_a.is_pressed() and not button_b.is_pressed():
-        display.set_pixel(4,0,0)
-        display.set_pixel(0,0,7)
-        servo1.set_degree(0)
+def button_b_pressed(delay_file):
+    ''' Decrease the time delay. '''
+    print('button b press detected')
+    display.show('+')
+    sleep(20)
+    display.clear()
+    delay_file.increase_delay()
+    display_show_delay()
 
-    if button_b.is_pressed() and not button_a.is_pressed():
-        display.set_pixel(0,0,0)
-        display.set_pixel(4,0,7)
-        servo1.set_degree(180)
+
+def display_create_image(num_leds):
+    ''' Create the leds_image of num_leds. '''
+    leds_string = BRIGHT * num_leds
+    leds_string = ":".join(leds_string[i:i+5]
+        for i in range(0, len(leds_string), 5))
+    leds_image = Image(leds_string + ':')
+    return leds_image
+
+
+def display_show_delay():
+    ''' Display the remaining delay. '''
+    num_leds = minutes_to_leds(delay_file.get_delay_min())
+    display.show(display_create_image(num_leds))
+
+
+def minutes_to_leds(minutes):
+    ''' How many LEDS to light to represent minutes of time. '''
+    return int(minutes / MINUTES_PER_LED)
+
+
+# setup servo on pin0
+# Creates repeated pulses in a 20ms time window.
+pin0.set_analog_period(20)
+servo_set_degree(0, pin0)
+delay_file = DelayFile(DELAY_FILE, DELAY_MINUTES)
+
+start_tick = time.ticks_ms()
+print('start_tick: {}'.format(start_tick))
+target_ticks = delay_file.get_delay_ms() + start_tick
+display_show_delay()
+
+while time.ticks_diff(delay_file.get_delay_ms()+start_tick, time.ticks_ms()) > 0:
+#    ticks_left = ticks_diff(delay_file.get_delay_ms(), start_tick)
+#    print('remaining ticks:'.format(ticks_left))
+    sleep(100)
+    elapsed_ticks = time.ticks_ms() - start_tick
+    remaining_tics = time.ticks_diff(delay_file.get_delay_ms()+start_tick, time.ticks_ms())
+    # print('remaining_ticks {}'.format(remaining_tics)) 
+
+    if button_a.was_pressed() and not button_b.was_pressed():
+       button_a_pressed(delay_file)
+
+    if button_b.was_pressed() and not button_a.was_pressed():
+       button_b_pressed(delay_file)
+
+servo_set_degree(180, pin0)
 
 
