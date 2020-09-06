@@ -14,6 +14,7 @@ BRIGHT = '7'
 DELAY_FILE = 'delay_minutes.txt'
 # delay in minutes until the feeder activates
 DELAY_MINUTES = 12
+DELAY_MINUTES = 1
 # maximum number of LEDs on the board
 LEDS = 25
 # maximum number of LEDs to use
@@ -22,55 +23,58 @@ MAX_DELAY_LEDS = 25
 MAX_DELAY_MINUTES = 300
 # how many minutes delay an active LED represents
 MINUTES_PER_LED = 12
+MINUTES_PER_LED = 1
 
-class DelayFile:
-    ''' Handle the file containing the delay time on the microbit. '''
-    def __init__(self, filename=DELAY_FILE, delay=DELAY_MINUTES):
-        self.filename = filename
-        try:
-            self.delay = self.readfile(filename)
-            print('delay file {} already exists with value {}'.format(
-                filename, self.delay))
-        except Exception as e:
-            print('could not read from {}\nerror {}\n'.format(
-                self.filename, e))
-            print('creating file with value: {}'.format(delay))
-            self.writefile(delay)
-            self.delay = delay
-        
+       
+def delay_initialise(filename=DELAY_FILE, delay=DELAY_MINUTES):
+    ''' Initialise the delay file if it does not already exist. '''
+    try:
+        delay = delay_readfile(filename)
+        print('delay file {} already exists with value {}'.format(
+            filename, delay))
+    except Exception as e:
+        print('could not read from {}\nerror {}\n'.format(
+            filename, e))
+        print('creating file with value: {}'.format(delay))
+        delay_writefile(delay)
 
-    def decrease_delay(self):
-        ''' Decrease the value in the delay file. '''
-        self.delay -= MINUTES_PER_LED
-        if self.delay < 0:
-            self.delay = 0
-        self.writefile(self.delay)
+def delay_decrease():
+    ''' Decrease the value in the delay file. '''
+    delay = delay_readfile()
+    delay -= MINUTES_PER_LED
+    if delay < 0:
+        delay = 0
+    delay_writefile(delay)
 
-    def get_delay_min(self):
-        return self.delay
-        
-    def get_delay_ms(self):
-        ''' Get the delay in ms. '''
-        return self.delay * 60 * 1000
+def delay_get_min():
+    return int(delay_readfile())
+    
+def delay_get_ms():
+    ''' Get the delay in ms. '''
+    delay_min = delay_get_min()
+    delay_ms = delay_min * 60000
+    return delay_ms
 
-    def increase_delay(self):
-        ''' Increase the value in the delay file. '''
-        self.delay += MINUTES_PER_LED
-        if self.delay > MAX_DELAY_MINUTES:
-            self.delay = MAX_DELAY_MINUTES
-        self.writefile(self.delay)
+def delay_increase():
+    ''' Increase the value in the delay file. '''
+    delay = delay_readfile(DELAY_FILE)
+    delay += MINUTES_PER_LED
+    if delay > MAX_DELAY_MINUTES:
+        delay = MAX_DELAY_MINUTES
+    delay_writefile(delay)
 
-    def readfile(self, filename):
-        ''' Read from the file on the microbit. '''
-        with open(filename, 'r') as my_file:
-            content = my_file.read()
-        return content 
+def delay_readfile(filename=DELAY_FILE):
+    ''' Read from the file on the microbit. '''
+    with open(filename, 'r') as my_file:
+        content = my_file.read()
+    # print('read: {} from: {}'.format(content, filename))
+    return int(content)
 
-    def writefile(self, value):
-        ''' Write to the file on the microbit. '''
-        with open(self.filename, 'w') as my_file:
-            my_file.write(str(value))
-            print('written {} to {}'.format(value, self.filename))
+def delay_writefile(delay):
+    ''' Write to the file on the microbit. '''
+    with open(DELAY_FILE, 'w') as my_file:
+        my_file.write(str(delay))
+        print('written {} to {}'.format(delay, DELAY_FILE))
 
 
 def servo_set_ms_pulse(ms_on, pin):
@@ -88,23 +92,23 @@ def servo_set_degree(degrees, pin):
 
 
 
-def button_a_pressed(delay_file):
+def button_a_pressed():
     ''' Increase the time delay. '''
     print('button a press detected')
     display.show('-')
     sleep(20)
     display.clear()
-    delay_file.decrease_delay()
-    display_show_delay()
+    delay_decrease()
+    display_show_delay(delay_get_min())
 
-def button_b_pressed(delay_file):
+def button_b_pressed():
     ''' Decrease the time delay. '''
     print('button b press detected')
     display.show('+')
     sleep(20)
     display.clear()
-    delay_file.increase_delay()
-    display_show_delay()
+    delay_increase()
+    display_show_delay(delay_get_min())
 
 
 def display_create_image(num_leds):
@@ -116,42 +120,53 @@ def display_create_image(num_leds):
     return leds_image
 
 
-def display_show_delay():
+def display_show_delay(delay_in_minutes):
     ''' Display the remaining delay. '''
-    num_leds = minutes_to_leds(delay_file.get_delay_min())
+    num_leds = minutes_to_leds(delay_in_minutes)
     display.show(display_create_image(num_leds))
 
 
 def minutes_to_leds(minutes):
     ''' How many LEDS to light to represent minutes of time. '''
-    return int(minutes / MINUTES_PER_LED)
+    num_leds = int(minutes/MINUTES_PER_LED)
+    if num_leds < 1:
+        num_leds = 1
+    return num_leds 
+
+def ms_to_min(ms):
+    ''' Convert ms to minutes. '''
+    return ms/60000
 
 
 # setup servo on pin0
 # Creates repeated pulses in a 20ms time window.
 pin0.set_analog_period(20)
 servo_set_degree(0, pin0)
-delay_file = DelayFile(DELAY_FILE, DELAY_MINUTES)
+delay_initialise()
 
 start_tick = time.ticks_ms()
 print('start_tick: {}'.format(start_tick))
-target_ticks = delay_file.get_delay_ms() + start_tick
-display_show_delay()
+target_ticks = delay_get_ms() + start_tick
+display_show_delay(delay_get_min())
 
-while time.ticks_diff(delay_file.get_delay_ms()+start_tick, time.ticks_ms()) > 0:
+while time.ticks_diff(delay_get_ms()+start_tick, time.ticks_ms()) > 0:
 #    ticks_left = ticks_diff(delay_file.get_delay_ms(), start_tick)
 #    print('remaining ticks:'.format(ticks_left))
     sleep(100)
-    elapsed_ticks = time.ticks_ms() - start_tick
-    remaining_tics = time.ticks_diff(delay_file.get_delay_ms()+start_tick, time.ticks_ms())
-    # print('remaining_ticks {}'.format(remaining_tics)) 
+    # elapsed_ticks = time.ticks_ms() - start_tick
+    remaining_tics = time.ticks_diff(delay_get_ms()+start_tick, time.ticks_ms())
+    # add 0.5 as int always rounds down
+    remaining_minutes = int(ms_to_min(remaining_tics)+0.5)
+    # print('remaining_minutes: {}'.format(remaining_minutes))
+    display_show_delay(remaining_minutes)
 
     if button_a.was_pressed() and not button_b.was_pressed():
-       button_a_pressed(delay_file)
+       button_a_pressed()
 
     if button_b.was_pressed() and not button_a.was_pressed():
-       button_b_pressed(delay_file)
+       button_b_pressed()
 
 servo_set_degree(180, pin0)
+display.clear()
 
 
