@@ -8,4 +8,8 @@ This is used to open a lock on a box of food. This feeds the guinea pigs.
 
 More information on the project can be found at:
 
+https://www.seismicmatt.com/2020/10/03/using-a-microbit-to-control-a-servo-motor/
+
+and
+
 https://www.seismicmatt.com/2020/09/08/bbc-microbit-activating-a-servo-motor-using-a-timer/
