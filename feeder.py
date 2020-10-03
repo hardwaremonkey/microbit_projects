@@ -3,7 +3,7 @@ Automated feeder. A servo activates after an adjustable delay.
 The delay can be increased or decreased using the buttons.
 Matthew Oppenheim 2020
 delay not saving to persistent file
-v0.1
+v1.0 First working version.
 '''
 
 # from microbit import button_a, button_b, display, Image, pin0, time
@@ -14,7 +14,6 @@ BRIGHT = '7'
 DELAY_FILE = 'delay_minutes.txt'
 # delay in minutes until the feeder activates
 DELAY_MINUTES = 12
-DELAY_MINUTES = 1
 # maximum number of LEDs on the board
 LEDS = 25
 # maximum number of LEDs to use
@@ -23,7 +22,6 @@ MAX_DELAY_LEDS = 25
 MAX_DELAY_MINUTES = 300
 # how many minutes delay an active LED represents
 MINUTES_PER_LED = 12
-MINUTES_PER_LED = 1
 
        
 def delay_initialise(filename=DELAY_FILE, delay=DELAY_MINUTES):
@@ -37,6 +35,8 @@ def delay_initialise(filename=DELAY_FILE, delay=DELAY_MINUTES):
             filename, e))
         print('creating file with value: {}'.format(delay))
         delay_writefile(delay)
+    if delay < DELAY_MINUTES:
+        delay_writefile(DELAY_MINUTES)
 
 def delay_decrease():
     ''' Decrease the value in the delay file. '''
@@ -91,7 +91,6 @@ def servo_set_degree(degrees, pin):
     print('servo set to {} degrees'.format(degrees))
 
 
-
 def button_a_pressed():
     ''' Increase the time delay. '''
     print('button a press detected')
@@ -100,6 +99,7 @@ def button_a_pressed():
     display.clear()
     delay_decrease()
     display_show_delay(delay_get_min())
+
 
 def button_b_pressed():
     ''' Decrease the time delay. '''
@@ -128,10 +128,12 @@ def display_show_delay(delay_in_minutes):
 
 def minutes_to_leds(minutes):
     ''' How many LEDS to light to represent minutes of time. '''
-    num_leds = int(minutes/MINUTES_PER_LED)
+    # add 0.5 as int always rounds down
+    num_leds = int(minutes/MINUTES_PER_LED+0.5)
     if num_leds < 1:
         num_leds = 1
     return num_leds 
+
 
 def ms_to_min(ms):
     ''' Convert ms to minutes. '''
